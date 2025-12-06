@@ -1,2 +1,2 @@
 scikit-learn
-streamlit-google-sheets
+st-gsheets-connection
