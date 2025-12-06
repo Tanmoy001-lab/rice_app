@@ -1,2 +1,5 @@
 scikit-learn
 st-gsheets-connection
+streamlit
+pandas
+openpyxl
