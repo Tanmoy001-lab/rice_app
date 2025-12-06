@@ -1,187 +1,161 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import os
 import numpy as np
-from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from datetime import datetime
 
 # --- CONFIGURATION ---
-DATA_FILE = 'rice_database.csv'
-IMG_FOLDER = 'uploaded_images'
+st.set_page_config(page_title="Rice AI Ultimate", layout="centered")
 
-# Ensure folders exist
-if not os.path.exists(IMG_FOLDER):
-    os.makedirs(IMG_FOLDER)
+# --- DATABASE CONNECTION ---
+# Connects to your Google Sheet using the secrets you set up
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Page setup
-st.set_page_config(page_title="Rice Quality AI", layout="centered")
-
-# --- HELPER FUNCTIONS ---
-def load_data():
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
-    return pd.DataFrame(columns=['filename', 'date', 'age_range', 'best_use', 'protein', 'hardness', 'moisture', 'suggestion'])
-
-def process_image_for_model(img_path):
-    """
-    Converts an image to a flat array of numbers for the AI to read.
-    Resizes to 64x64 to keep it fast.
-    """
+def get_data():
+    """Reads the latest data from Google Sheets"""
     try:
-        img = Image.open(img_path).convert('L') # Convert to grayscale
-        img = img.resize((64, 64))
-        return np.array(img).flatten()
+        df = conn.read(worksheet="Sheet1", ttl=0)
+        # Handle cases where data might be empty or missing columns
+        if df.empty:
+            return pd.DataFrame(columns=['date', 'age', 'use', 'protein', 'hardness', 'moisture', 'suggestion'])
+        return df
     except Exception as e:
-        return None
+        st.error(f"Error reading data: {e}")
+        return pd.DataFrame()
 
-def train_and_predict(target_image):
+def add_data(row_dict):
+    """Adds a new row to the database"""
+    df = get_data()
+    new_df = pd.DataFrame([row_dict])
+    updated_df = pd.concat([df, new_df], ignore_index=True)
+    conn.update(worksheet="Sheet1", data=updated_df)
+
+# --- THE AI ENGINE ---
+def train_and_predict_all(input_features):
     """
-    1. Loads all saved data.
-    2. Trains a Random Forest model on the fly.
-    3. Predicts the stats for the target_image.
+    Trains multiple models to predict ALL topics at once.
     """
-    df = load_data()
+    df = get_data()
     
-    if len(df) < 5:
-        return "Not enough data to train! Please add at least 5 samples in the 'Train' tab."
+    # 1. Check if we have enough data
+    if len(df) < 3:
+        return "⚠️ Not enough data! Please add at least 3 rows in the 'Train' tab."
+    
+    # 2. Prepare the Inputs (X) and Targets (y)
+    # Ensure column names match your Google Sheet exactly
+    X = df[['protein', 'hardness', 'moisture']].values
+    
+    # Target 1: Best Use
+    y_use = df['use'].astype(str).values
+    
+    # Target 2: Suggestion
+    y_sugg = df['suggestion'].astype(str).values
+    
+    # Target 3: Age
+    y_age = df['age'].astype(str).values
 
-    # Prepare Training Data
-    X = [] # Images
-    y_protein = [] # Labels
-    y_hardness = []
-    
-    for index, row in df.iterrows():
-        img_p = os.path.join(IMG_FOLDER, row['filename'])
-        if os.path.exists(img_p):
-            features = process_image_for_model(img_p)
-            if features is not None:
-                X.append(features)
-                y_protein.append(row['protein'])
-                y_hardness.append(row['hardness'])
-    
-    if not X:
-        return "Error loading training images."
+    # 3. Create and Train the Models (The "Brains")
+    # We use Try/Except blocks to prevent the app from crashing if one column is empty
+    try:
+        model_use = RandomForestClassifier(n_estimators=10)
+        model_use.fit(X, y_use)
+        pred_use = model_use.predict([input_features])[0]
+    except:
+        pred_use = "Unknown (Not enough info)"
 
-    # Train Models (Simple Random Forest)
-    # Note: In a real large app, you wouldn't retrain on every click, 
-    # you would save the model file. For this size, this is fine.
-    model_protein = RandomForestClassifier(n_estimators=10)
-    model_protein.fit(X, y_protein)
-    
-    model_hardness = RandomForestClassifier(n_estimators=10)
-    model_hardness.fit(X, y_hardness)
+    try:
+        model_sugg = RandomForestClassifier(n_estimators=10)
+        model_sugg.fit(X, y_sugg)
+        pred_sugg = model_sugg.predict([input_features])[0]
+    except:
+        pred_sugg = "Unknown"
 
-    # Predict
-    target_features = process_image_for_model(target_image).reshape(1, -1)
-    pred_protein = model_protein.predict(target_features)[0]
-    pred_hardness = model_hardness.predict(target_features)[0]
-    
+    try:
+        model_age = RandomForestClassifier(n_estimators=10)
+        model_age.fit(X, y_age)
+        pred_age = model_age.predict([input_features])[0]
+    except:
+        pred_age = "Unknown"
+
+    # Return all results as a dictionary
     return {
-        "protein": pred_protein,
-        "hardness": pred_hardness,
-        "suggestion": "Based on hardness, suitable for general cooking." if pred_hardness > 5 else "Soft rice, good for porridge."
+        "use": pred_use,
+        "suggestion": pred_sugg,
+        "age": pred_age
     }
 
-# --- MAIN APP INTERFACE ---
-st.title("🌾 Rice Grain Analyzer AI")
-st.write("Upload or take a photo of rice grains to Train or Predict.")
+# --- WEBSITE INTERFACE ---
+st.title("🌾 Rice AI: Complete Analysis")
+st.markdown("Predicts **Best Use**, **Age**, and **Expert Suggestions** based on grain quality.")
 
-# Create Tabs
-tab1, tab2 = st.tabs(["🏋️ Train Database", "🔮 Predict Quality"])
+tab1, tab2 = st.tabs(["📝 Train (Add Data)", "🔮 Predict (All Topics)"])
 
-# --- TAB 1: TRAIN ---
+# --- TAB 1: ADD DATA ---
 with tab1:
-    st.header("Add Data to Knowledge Base")
+    st.subheader("Add Knowledge to Database")
     
-    # Inputs
-    col1, col2 = st.columns(2)
-    with col1:
-        d_date = st.date_input("Date", datetime.now())
-        d_age = st.selectbox("Age Range", ["New Crop", "6 Months", "1 Year", "Old"])
-        d_use = st.selectbox("Best Use", ["Biryani", "Daily Rice", "Idli/Dosa", "Porridge"])
-    with col2:
-        d_protein = st.slider("Protein Level (%)", 0.0, 15.0, 7.0)
-        d_hardness = st.slider("Hardness (1-10)", 1, 10, 5)
-        d_moisture = st.slider("Moisture (%)", 0, 20, 12)
+    c1, c2 = st.columns(2)
+    with c1:
+        d_age = st.selectbox("Rice Age", ["New Crop", "6 Months", "1 Year", "Old (>2 Years)"])
+        d_use = st.selectbox("Best Use", ["Biryani", "Daily Rice", "Idli/Dosa", "Porridge", "Fried Rice"])
+    with c2:
+        d_pro = st.slider("Protein %", 1.0, 15.0, 7.0)
+        d_hard = st.slider("Hardness", 1, 10, 5)
+        d_moist = st.slider("Moisture %", 1, 20, 12)
+        
+    d_sugg = st.text_input("Suggestion (e.g., 'Cook with extra water')", "Standard cooking required")
     
-    d_sugg = st.text_area("Expert Suggestion", "Good for daily consumption.")
+    if st.button("Save Entry to Cloud"):
+        new_row = {
+            "date": pd.Timestamp.now().strftime("%Y-%m-%d"),
+            "age": d_age,
+            "use": d_use,
+            "protein": d_pro,
+            "hardness": d_hard,
+            "moisture": d_moist,
+            "suggestion": d_sugg
+        }
+        with st.spinner("Saving to Google Sheets..."):
+            add_data(new_row)
+            st.success("✅ Saved! The AI has learned from this.")
 
-    # Image Input (Camera or Upload)
-    img_source = st.radio("Image Source", ["Camera", "Upload File"])
-    image_file = None
-    
-    if img_source == "Camera":
-        image_file = st.camera_input("Take a picture of the rice")
-    else:
-        image_file = st.file_uploader("Upload an image", type=['jpg', 'png', 'jpeg'])
-
-    if st.button("Save to Database"):
-        if image_file is not None:
-            # Save Image
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"rice_{timestamp}.jpg"
-            filepath = os.path.join(IMG_FOLDER, filename)
-            
-            with open(filepath, "wb") as f:
-                f.write(image_file.getbuffer())
-            
-            # Save Data
-            new_data = {
-                'filename': filename,
-                'date': d_date,
-                'age_range': d_age,
-                'best_use': d_use,
-                'protein': d_protein,
-                'hardness': d_hardness,
-                'moisture': d_moisture,
-                'suggestion': d_sugg
-            }
-            
-            df = load_data()
-            df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
-            df.to_csv(DATA_FILE, index=False)
-            
-            st.success("✅ Data Saved Successfully!")
-        else:
-            st.error("Please provide an image.")
-
-    # Show current data
-    if st.checkbox("Show Database"):
-        st.dataframe(load_data())
+    with st.expander("View Current Database"):
+        st.dataframe(get_data())
 
 # --- TAB 2: PREDICT ---
 with tab2:
-    st.header("Analyze Rice Sample")
+    st.subheader("Predict All Topics")
     
-    pred_source = st.radio("Select Source", ["Camera", "Upload File"], key="pred_radio")
-    pred_file = None
+    st.write("Set the detected parameters:")
     
-    if pred_source == "Camera":
-        pred_file = st.camera_input("Take a picture for prediction", key="pred_cam")
-    else:
-        pred_file = st.file_uploader("Upload for prediction", type=['jpg', 'png', 'jpeg'], key="pred_upload")
-
-    if pred_file is not None:
-        st.image(pred_file, caption="Analyzing...", width=300)
-        
-        if st.button("Predict Results"):
-            with st.spinner("AI is processing..."):
-                # Save temp file for processing
-                temp_path = "temp_predict.jpg"
-                with open(temp_path, "wb") as f:
-                    f.write(pred_file.getbuffer())
+    # Input Sliders
+    p1 = st.slider("Detected Protein", 1.0, 15.0, 7.5, key="p1")
+    p2 = st.slider("Detected Hardness", 1, 10, 6, key="p2")
+    p3 = st.slider("Detected Moisture", 1, 20, 11, key="p3")
+    
+    st.caption("Tip: You can change these inputs to see how the prediction changes.")
+    
+    if st.button("Analyze Results"):
+        with st.spinner("Running multiple AI models..."):
+            
+            # Run the prediction function
+            results = train_and_predict_all([p1, p2, p3])
+            
+            # Check if it returned an error string or the result dictionary
+            if isinstance(results, str):
+                st.error(results)
+            else:
+                # Display Results nicely
+                st.balloons()
                 
-                # Run Logic
-                result = train_and_predict(temp_path)
+                # Create 3 nice boxes for the output
+                col_a, col_b, col_c = st.columns(3)
                 
-                if isinstance(result, str):
-                    st.warning(result)
-                else:
-                    st.balloons()
-                    st.subheader("🎯 Analysis Results")
-                    c1, c2 = st.columns(2)
-                    c1.metric("Predicted Protein", f"{result['protein']}%")
-                    c2.metric("Predicted Hardness", f"{result['hardness']}/10")
-                    st.info(f"💡 Suggestion: {result['suggestion']}")
+                with col_a:
+                    st.metric("Recommended Use", results['use'])
+                
+                with col_b:
+                    st.metric("Estimated Age", results['age'])
+                
+                with col_c:
+                    st.info(f"💡 **Suggestion:**\n\n{results['suggestion']}")
