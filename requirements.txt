@@ -1,5 +1,5 @@
 streamlit
 pandas
-pillow
-scikit-learn
 numpy
+scikit-learn
+streamlit-google-sheets
