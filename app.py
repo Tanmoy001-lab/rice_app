@@ -13,17 +13,32 @@ st.set_page_config(page_title="Rice AI Ultimate", layout="centered")
 # ... (st.set_page_config remains here) ...
 
 # --- HIDE STREAMLIT BRANDING ---
-# --- HIDE STREAMLIT STYLE ---
+# --- HIDE STREAMLIT BRANDING (Nuclear Option) ---
 hide_st_style = """
             <style>
+            /* Hides the Main Menu (top right) */
             #MainMenu {visibility: hidden;}
+            
+            /* Hides the footer (Made with Streamlit) */
             footer {visibility: hidden;}
+            
+            /* Hides the header (The colored bar at the top) */
             header {visibility: hidden;}
+            
+            /* Hides the "Manage App" button (bottom right) */
             .stDeployButton {display:none;}
+            
+            /* Hides the Toolbar (where "Created by" sometimes hides) */
+            [data-testid="stToolbar"] {visibility: hidden !important;}
+            
+            /* Hides the decoration (top colored line) */
+            [data-testid="stDecoration"] {visibility: hidden !important;}
+            
+            /* Hides the status widget (top right running man) */
+            [data-testid="stStatusWidget"] {visibility: hidden !important;}
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
-
 # ... (The rest of your code follows below) ...
 
 # --- 1. SETUP (PASTE YOUR LINK HERE) ---
