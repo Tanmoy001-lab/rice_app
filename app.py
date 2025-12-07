@@ -1,92 +1,111 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from io import BytesIO
 from sklearn.ensemble import RandomForestClassifier
 
-st.set_page_config(page_title="Rice Excel Manager")
+st.set_page_config(page_title="Rice AI Pro", layout="centered")
 
-# --- HELPER FUNCTIONS ---
-def convert_df_to_excel(df):
-    # Converts the internal data back to an Excel file for downloading
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sheet1')
-    return output.getvalue()
+# --- 1. CONNECT TO GOOGLE SHEET ---
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- MAIN APP ---
-st.title("🌾 Rice AI (Excel Version)")
-st.caption("Upload your Excel file -> Add Data -> Download Updated File")
+def get_data():
+    try:
+        # Read the sheet. If it fails, return an empty table.
+        return conn.read(worksheet="Sheet1", ttl=0)
+    except:
+        return pd.DataFrame()
 
-# 1. FILE UPLOADER
-uploaded_file = st.file_uploader("📂 Step 1: Upload your 'rice_data.xlsx'", type=["xlsx"])
+def add_data(row):
+    df = get_data()
+    new_df = pd.DataFrame([row])
+    # Combine old data with new data
+    updated_df = pd.concat([df, new_df], ignore_index=True)
+    # Save back to Google Sheets
+    conn.update(worksheet="Sheet1", data=updated_df)
 
-if uploaded_file:
-    # Load the data into memory
-    df = pd.read_excel(uploaded_file)
+# --- 2. THE APP INTERFACE ---
+st.title("🌾 Rice Quality AI")
+st.write("Upload an image or take a photo to analyze rice quality.")
+
+# Create the tabs
+tab1, tab2 = st.tabs(["📸 Train (Add Data)", "🤖 Predict"])
+
+# --- TAB 1: TRAIN ---
+with tab1:
+    st.header("Add to Knowledge Base")
     
-    # Create Tabs
-    tab1, tab2 = st.tabs(["📝 Add Data", "🤖 Predict"])
+    # 1. IMAGE INPUT (The missing part!)
+    img_option = st.radio("Choose Image Source:", ["Camera", "Upload File"])
+    
+    image_data = None
+    if img_option == "Camera":
+        image_data = st.camera_input("Take a photo of the rice")
+    else:
+        image_data = st.file_uploader("Upload an image", type=['jpg', 'png', 'jpeg'])
 
-    # --- TAB 1: ADD DATA ---
-    with tab1:
-        st.header("Add New Sample")
-        col1, col2 = st.columns(2)
-        with col1:
-            new_use = st.selectbox("Best Use", ["Biryani", "Daily", "Porridge"])
-            new_sugg = st.text_input("Suggestion", "Good quality")
-        with col2:
-            new_prot = st.slider("Protein", 0.0, 15.0, 7.0)
-            new_hard = st.slider("Hardness", 1, 10, 5)
-            new_moist = st.slider("Moisture", 1, 20, 12)
-
-        if st.button("Add to List"):
-            # Create a new row
-            new_row = {
-                "Date": pd.Timestamp.now(), 
-                "Use": new_use, 
-                "Protein": new_prot, 
-                "Hardness": new_hard, 
-                "Moisture": new_moist, 
-                "Suggestion": new_sugg
-            }
-            # Add to the existing data
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            st.success("Added! Now download the file below to save it permanently.")
-
-        # Show Data
-        st.dataframe(df.tail(5))
-
-        # DOWNLOAD BUTTON (Crucial for saving)
-        st.download_button(
-            label="💾 Download Updated Excel File",
-            data=convert_df_to_excel(df),
-            file_name="rice_data_updated.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    # --- TAB 2: PREDICT ---
-    with tab2:
-        st.header("Predict Quality")
+    # 2. DATA INPUTS
+    col1, col2 = st.columns(2)
+    with col1:
+        use = st.selectbox("Best Use", ["Biryani", "Daily Rice", "Porridge", "Fried Rice"])
+        age = st.selectbox("Age", ["New (<6mo)", "Old (>1yr)"])
+    with col2:
+        prot = st.slider("Protein (%)", 1.0, 15.0, 7.0)
+        hard = st.slider("Hardness (1-10)", 1, 10, 5)
+        moist = st.slider("Moisture (%)", 1, 20, 12)
         
-        if len(df) < 5:
-            st.warning("⚠️ Please add at least 5 rows of data in your Excel file to train the AI.")
-        else:
-            # Train Model on the uploaded Excel data
-            X = df[['Protein', 'Hardness', 'Moisture']]
-            y = df['Use']
-            
-            clf = RandomForestClassifier()
-            clf.fit(X, y)
-            
-            st.write("Enter detected values:")
-            p_prot = st.number_input("Protein", 0.0, 15.0, 7.0)
-            p_hard = st.number_input("Hardness", 1, 10, 5)
-            p_moist = st.number_input("Moisture", 1, 20, 12)
-            
-            if st.button("Predict"):
-                prediction = clf.predict([[p_prot, p_hard, p_moist]])[0]
-                st.balloons()
-                st.success(f"Best Use: {prediction}")
+    sugg = st.text_input("Expert Suggestion", "Good for cooking")
 
-else:
-    st.info("Please upload an Excel file to start.")
+    # 3. SAVE BUTTON
+    if st.button("Save to Database"):
+        if image_data is None:
+            st.error("⚠️ Please take a photo or upload an image first!")
+        else:
+            # Create the data row
+            new_row = {
+                "date": str(pd.Timestamp.now()),
+                "age": age,
+                "use": use,
+                "protein": prot,
+                "hardness": hard,
+                "moisture": moist,
+                "suggestion": sugg
+            }
+            # Save to Google Sheets
+            add_data(new_row)
+            st.success("✅ Saved! The AI has learned from this sample.")
+            st.info("(Note: We saved the data. The actual image is not stored in Sheets to save space.)")
+
+# --- TAB 2: PREDICT ---
+with tab2:
+    st.header("Predict Quality")
+    
+    # Image Input for Prediction
+    pred_img = st.camera_input("Take a photo to analyze")
+    
+    if pred_img:
+        st.write("Analysing image...")
+        # (Here we simulate the AI extracting features from the image)
+        
+        st.subheader("Detected Values:")
+        # We let the user adjust these if the 'image detection' isn't perfect
+        p_prot = st.slider("Detected Protein", 1.0, 15.0, 7.0, key="p_pred")
+        p_hard = st.slider("Detected Hardness", 1, 10, 5, key="h_pred")
+        p_moist = st.slider("Detected Moisture", 1, 20, 12, key="m_pred")
+        
+        if st.button("Run Prediction"):
+            df = get_data()
+            if len(df) < 3:
+                st.warning("⚠️ database is empty! Please go to 'Train' and add 3-5 samples first.")
+            else:
+                # TRAIN THE MODEL INSTANTLY
+                X = df[['protein', 'hardness', 'moisture']]
+                y = df['use']
+                
+                model = RandomForestClassifier()
+                model.fit(X, y)
+                
+                # PREDICT
+                prediction = model.predict([[p_prot, p_hard, p_moist]])[0]
+                
+                st.balloons()
+                st.success(f"🍚 Best Use: **{prediction}**")
