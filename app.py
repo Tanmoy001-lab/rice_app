@@ -1,13 +1,13 @@
-
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 
-st.set_page_config(page_title="Rice AI Final", layout="centered")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Rice AI Ultimate", layout="centered")
 
-# --- 1. SETUP (THE FIX) ---
-# Paste your Google Sheet Link exactly inside these quotes:
+# --- 1. SETUP (PASTE YOUR LINK HERE) ---
+# ⚠️ PASTE YOUR GOOGLE SHEET LINK INSIDE THE QUOTES BELOW:
 SHEET_URL = "https://docs.google.com/spreadsheets/d/10lXOiNCfJDnz5bvTtTydEcLfX4FSirfxvitum4udmNs/edit?gid=0#gid=0"
 
 # Connect to the robot
@@ -15,10 +15,9 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # We tell the robot EXACTLY which sheet to look at using the URL
+        # Read the sheet using the hardcoded URL
         return conn.read(spreadsheet=SHEET_URL, worksheet="Sheet1", ttl=0)
     except Exception as e:
-        # If it fails, we print the error to help debug
         st.error(f"Database Error: {e}")
         return pd.DataFrame()
 
@@ -26,48 +25,113 @@ def add_data(row):
     df = get_data()
     new_df = pd.DataFrame([row])
     updated_df = pd.concat([df, new_df], ignore_index=True)
-    # We tell the robot EXACTLY where to save
     conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated_df)
 
+def train_and_predict_all(input_features):
+    df = get_data()
+    if len(df) < 2:
+        return "Not enough data"
+    
+    # Inputs: Protein, Hardness, Moisture
+    X = df[['protein', 'hardness', 'moisture']].values
+    
+    # We train 3 separate brains to predict 3 different things
+    y_use = df['use'].astype(str)
+    y_age = df['age'].astype(str)
+    y_sugg = df['suggestion'].astype(str)
+
+    # Brain 1: Predict Use
+    model_use = RandomForestClassifier()
+    model_use.fit(X, y_use)
+    pred_use = model_use.predict([input_features])[0]
+
+    # Brain 2: Predict Age
+    model_age = RandomForestClassifier()
+    model_age.fit(X, y_age)
+    pred_age = model_age.predict([input_features])[0]
+
+    # Brain 3: Predict Suggestion
+    model_sugg = RandomForestClassifier()
+    model_sugg.fit(X, y_sugg)
+    pred_sugg = model_sugg.predict([input_features])[0]
+
+    return pred_use, pred_age, pred_sugg
+
 # --- 2. APP INTERFACE ---
-st.title("🌾 Rice Quality AI")
+st.title("🌾 Rice Quality AI Pro")
 
-tab1, tab2 = st.tabs(["📸 Add Data", "🤖 Predict"])
+tab1, tab2 = st.tabs(["📸 Train (Add Data)", "🔮 Predict Full Details"])
 
+# --- TAB 1: ADD DATA ---
 with tab1:
-    st.header("Train the AI")
+    st.header("Add to Knowledge Base")
     
-    # Inputs
-    img = st.camera_input("Take a photo")
-    use = st.selectbox("Best Use", ["Biryani", "Daily", "Porridge"])
-    prot = st.slider("Protein", 1.0, 15.0, 7.0)
-    hard = st.slider("Hardness", 1, 10, 5)
-    moist = st.slider("Moisture", 1, 20, 12)
-    sugg = st.text_input("Suggestion", "Good")
+    # 1. Image Option (Camera OR Upload)
+    img_source = st.radio("Image Source:", ["Camera", "Upload File"], horizontal=True)
     
-    if st.button("Save Data"):
-        row = {
-            "date": str(pd.Timestamp.now()), 
-            "age": "New", 
-            "use": use, 
-            "protein": prot, 
-            "hardness": hard, 
-            "moisture": moist, 
-            "suggestion": sugg
-        }
-        add_data(row)
-        st.success("Saved!")
+    if img_source == "Camera":
+        img = st.camera_input("Take a photo")
+    else:
+        img = st.file_uploader("Upload Image", type=['jpg', 'png', 'jpeg'])
 
-with tab2:
-    st.header("Predict")
-    if st.button("Run Prediction"):
-        df = get_data()
-        if len(df) < 2:
-            st.warning("Please save at least 2 rows of data first!")
+    # 2. Details
+    col1, col2 = st.columns(2)
+    with col1:
+        # Added Age Input
+        d_age = st.selectbox("Rice Age", ["New (<6 Months)", "Mid (6-12 Months)", "Old (>1 Year)"])
+        d_use = st.selectbox("Best Use", ["Biryani", "Daily Rice", "Porridge", "Fried Rice", "Idli/Dosa"])
+    
+    with col2:
+        # Sliders now go to 100
+        d_prot = st.slider("Protein (%)", 0, 100, 10)
+        d_hard = st.slider("Hardness (0-100)", 0, 100, 50)
+        d_moist = st.slider("Moisture (%)", 0, 100, 20)
+
+    d_sugg = st.text_input("Expert Suggestion", "Excellent quality for cooking")
+
+    if st.button("Save to Database"):
+        if img is None:
+            st.warning("⚠️ Please provide an image first.")
         else:
-            X = df[['protein', 'hardness', 'moisture']]
-            y = df['use'].astype(str)
-            model = RandomForestClassifier()
-            model.fit(X, y)
-            res = model.predict([[prot, hard, moist]])[0]
-            st.success(f"Prediction: {res}")
+            row = {
+                "date": str(pd.Timestamp.now()), 
+                "age": d_age, 
+                "use": d_use, 
+                "protein": d_prot, 
+                "hardness": d_hard, 
+                "moisture": d_moist, 
+                "suggestion": d_sugg
+            }
+            add_data(row)
+            st.success("✅ Saved! The AI is getting smarter.")
+
+# --- TAB 2: PREDICT ---
+with tab2:
+    st.header("Predict Quality")
+    st.write("Enter values to see what the AI thinks.")
+    
+    # Prediction Inputs (Also 0-100)
+    p_prot = st.slider("Detected Protein", 0, 100, 10, key="p_p")
+    p_hard = st.slider("Detected Hardness", 0, 100, 50, key="p_h")
+    p_moist = st.slider("Detected Moisture", 0, 100, 20, key="p_m")
+
+    if st.button("Analyze Results"):
+        with st.spinner("Analyzing patterns..."):
+            features = [p_prot, p_hard, p_moist]
+            result = train_and_predict_all(features)
+            
+            if result == "Not enough data":
+                st.error("⚠️ Not enough training data! Please go to the 'Train' tab and add at least 2 samples.")
+            else:
+                # Unpack the 3 results
+                res_use, res_age, res_sugg = result
+                
+                st.balloons()
+                
+                # Show results in nice boxes
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Predicted Use", res_use)
+                c2.metric("Predicted Age", res_age)
+                c3.metric("Suggestion", "See below")
+                
+                st.info(f"💡 **AI Suggestion:** {res_sugg}")
