@@ -6,6 +6,21 @@ from sklearn.ensemble import RandomForestClassifier
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Rice AI Ultimate", layout="centered")
 
+# ... (Your imports remain here) ...
+# ... (st.set_page_config remains here) ...
+
+# --- HIDE STREAMLIT BRANDING ---
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# ... (The rest of your code follows below) ...
+
 # --- 1. SETUP (PASTE YOUR LINK HERE) ---
 # ⚠️ PASTE YOUR GOOGLE SHEET LINK INSIDE THE QUOTES BELOW:
 SHEET_URL = "https://docs.google.com/spreadsheets/d/10lXOiNCfJDnz5bvTtTydEcLfX4FSirfxvitum4udmNs/edit?gid=0#gid=0"
