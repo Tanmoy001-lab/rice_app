@@ -9,12 +9,17 @@ st.set_page_config(page_title="Rice AI Ultimate", layout="centered")
 # ... (Your imports remain here) ...
 # ... (st.set_page_config remains here) ...
 
+# ... (Your imports remain here) ...
+# ... (st.set_page_config remains here) ...
+
 # --- HIDE STREAMLIT BRANDING ---
+# --- HIDE STREAMLIT STYLE ---
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
+            .stDeployButton {display:none;}
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
