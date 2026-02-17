@@ -4,9 +4,32 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
+import firebase_admin
+from firebase_admin import credentials, storage
+from tensorflow.keras.models import load_model
+
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Rice AI Secure", layout="centered")
+
+# model loading
+model = load_model("rice_model.h5")
+
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-key.json")
+    firebase_admin.initialize_app(cred, {
+        'storageBucket': 'rice-app.appspot.com'
+    })
+
+bucket = storage.bucket()
+
+def upload_to_firebase(file):
+    blob = bucket.blob(f"rice_images/{file.name}")
+    blob.upload_from_string(file.getvalue(), content_type=file.type)
+    blob.make_public()
+    return blob.public_url
+
 
 # --- HIDE STREAMLIT BRANDING (Nuclear Option) ---
 hide_st_style = """
@@ -69,19 +92,16 @@ def add_data(row):
     conn.update(spreadsheet=SHEET_URL, worksheet="Sheet1", data=updated_df)
 
 # --- VISION SYSTEM ---
-def predict_age_from_image(uploaded_image):
-    try:
-        img = Image.open(uploaded_image)
-        img = img.resize((100, 100))
-        img_array = np.array(img)
-        avg_r = np.mean(img_array[:, :, 0])
-        avg_b = np.mean(img_array[:, :, 2])
-        if avg_b < (avg_r * 0.9): 
-            return "Old (>1 Year)", "Yellowish tint detected."
-        else:
-            return "New (<6 Months)", "Bright white color detected."
-    except:
-        return "Unknown", "Could not analyze image."
+def predict_image(img):
+    labels = ["New Rice", "Mid Age Rice", "Old Rice"]
+
+    image = Image.open(img).resize((128,128))
+    image = np.array(image) / 255.0
+    image = image.reshape(1,128,128,3)
+
+    pred = model.predict(image)
+    return labels[np.argmax(pred)]
+
 
 # --- AI TRAINING SYSTEM ---
 def train_and_predict_all(input_features):
@@ -139,11 +159,22 @@ with tab1:
         if img is None:
             st.warning("⚠️ Please provide an image first.")
         else:
+            image_url = upload_to_firebase(img)
+
             add_data({
-                "date": str(pd.Timestamp.now()), "age": d_age, "use": d_use, 
-                "protein": d_prot, "hardness": d_hard, "moisture": d_moist, "suggestion": d_sugg
+                "date": str(pd.Timestamp.now()),
+                "image": image_url,
+                "age": d_age,
+                "use": d_use,
+                "protein": d_prot,
+                "hardness": d_hard,
+                "moisture": d_moist,
+                "suggestion": d_sugg
             })
-            st.success("✅ Saved!")
+
+            st.image(img, caption="Saved Image")
+            st.success("✅ Image + Data Saved!")
+
 
 # --- TAB 2: PREDICT ---
 with tab2:
@@ -160,9 +191,8 @@ with tab2:
     
     detected_age_visual = "No Photo"
     if p_img:
-        detected_age_visual, reason = predict_age_from_image(p_img)
-        st.info(f"📸 **Vision Analysis:** I think this rice is **{detected_age_visual}**")
-        st.caption(f"Reason: {reason}")
+        detected_age_visual = predict_image(p_img)
+        st.info(f"📸 Vision Model Prediction: {detected_age_visual}")
     
     st.write("---")
     p_prot = st.slider("Detected Protein", 0, 100, 10, key="p_p")

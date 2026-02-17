@@ -3,3 +3,10 @@ st-gsheets-connection
 streamlit
 pandas
 openpyxl
+
+
+numpy
+pillow
+tensorflow
+firebase-admin
+
