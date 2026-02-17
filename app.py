@@ -15,7 +15,12 @@ import uuid
 st.set_page_config(page_title="Rice AI Secure", layout="centered")
 
 # model loading
-model = load_model("rice_model.h5")
+@st.cache_resource
+def load_my_model():
+    return load_model("rice_model.h5")
+
+model = load_my_model()
+
 
 
 def upload_to_drive(uploaded_file):
