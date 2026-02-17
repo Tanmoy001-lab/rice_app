@@ -23,12 +23,25 @@ if not firebase_admin._apps:
     })
 
 bucket = storage.bucket()
+def upload_to_drive(uploaded_file):
+    gauth = GoogleAuth()
+    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
+        "drive-key.json",
+        ["https://www.googleapis.com/auth/drive.file"]
+    )
 
-def upload_to_firebase(file):
-    blob = bucket.blob(f"rice_images/{file.name}")
-    blob.upload_from_string(file.getvalue(), content_type=file.type)
-    blob.make_public()
-    return blob.public_url
+    drive = GoogleDrive(gauth)
+
+    filename = f"{uuid.uuid4()}.jpg"
+
+    with open(filename, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    file_drive = drive.CreateFile({'title': filename})
+    file_drive.SetContentFile(filename)
+    file_drive.Upload()
+
+    return f"https://drive.google.com/file/d/{file_drive['id']}/view"
 
 
 # --- HIDE STREAMLIT BRANDING (Nuclear Option) ---
