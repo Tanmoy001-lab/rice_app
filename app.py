@@ -36,7 +36,14 @@ def upload_to_drive(uploaded_file):
     file_drive.SetContentFile(filename)
     file_drive.Upload()
 
-    return f"https://drive.google.com/file/d/{file_drive['id']}/view"
+    # Make file public
+    file_drive.InsertPermission({
+        'type': 'anyone',
+        'value': 'anyone',
+        'role': 'reader'
+    })
+
+    return f"https://drive.google.com/uc?id={file_drive['id']}"
 
 
 # --- HIDE STREAMLIT BRANDING (Nuclear Option) ---
