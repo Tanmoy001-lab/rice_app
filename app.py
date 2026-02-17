@@ -4,10 +4,12 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
-import firebase_admin
-from firebase_admin import credentials, storage
 from tensorflow.keras.models import load_model
 
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
+from oauth2client.service_account import ServiceAccountCredentials
+import uuid
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Rice AI Secure", layout="centered")
@@ -16,18 +18,11 @@ st.set_page_config(page_title="Rice AI Secure", layout="centered")
 model = load_model("rice_model.h5")
 
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase-key.json")
-    firebase_admin.initialize_app(cred, {
-        'storageBucket': 'rice-app.appspot.com'
-    })
-
-bucket = storage.bucket()
 def upload_to_drive(uploaded_file):
     gauth = GoogleAuth()
     gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
         "drive-key.json",
-        ["https://www.googleapis.com/auth/drive.file"]
+        ["https://www.googleapis.com/auth/drive"]
     )
 
     drive = GoogleDrive(gauth)
@@ -172,7 +167,8 @@ with tab1:
         if img is None:
             st.warning("⚠️ Please provide an image first.")
         else:
-            image_url = upload_to_firebase(img)
+            image_url = upload_to_drive(img)
+
 
             add_data({
                 "date": str(pd.Timestamp.now()),

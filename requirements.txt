@@ -8,5 +8,7 @@ openpyxl
 numpy
 pillow
 tensorflow
-firebase-admin
+pydrive2
+google-auth
+oauth2client
 
