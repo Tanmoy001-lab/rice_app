@@ -135,8 +135,10 @@ def get_gcp_creds():
     if "drive_token" in st.secrets:
         try:
             token_info = st.secrets["drive_token"]
-            # Reconstruct credentials from dictionary
-            return UserCredentials.from_authorized_user_info(token_info, scopes)
+            # Use the scopes from the token itself (likely just 'drive')
+            # 'drive' scope is sufficient for Sheets too.
+            # Explictly requesting 'spreadsheets' when the token doesn't have it causes "invalid_scope".
+            return UserCredentials.from_authorized_user_info(token_info, scopes=None)
         except Exception as e:
             st.error(f"Failed to load User Token from secrets: {e}")
 
