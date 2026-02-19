@@ -417,122 +417,7 @@ def logout():
 # LOGIN PAGE
 # --------------------------------------------------
 
-def login_page():
-    st.title("🌾 Rice Quality AI Pro")
-    st.markdown("---")
-    st.markdown("### 🔐 Login Portal")
-
-    # Check for existing token
-    if os.path.exists("app_token.json"):
-        try:
-            creds = UserCredentials.from_authorized_user_file("app_token.json", SCOPES)
-            if creds and creds.valid:
-                # Auto-login
-                service = build("oauth2", "v2", credentials=creds)
-                user_info = service.userinfo().get().execute()
-                email = user_info.get("email")
-                if email:
-                    role = "admin" if email in ADMIN_EMAILS else "user"
-                    st.session_state.logged_in = True
-                    st.session_state.role = role
-                    st.session_state.user_email = email
-                    st.rerun()
-            elif creds and creds.expired and creds.refresh_token:
-                creds.refresh(google_requests.Request())
-                with open("app_token.json", "w") as token:
-                    token.write(creds.to_json())
-                # Auto-login after refresh
-                service = build("oauth2", "v2", credentials=creds)
-                user_info = service.userinfo().get().execute()
-                email = user_info.get("email")
-                if email:
-                    role = "admin" if email in ADMIN_EMAILS else "user"
-                    st.session_state.logged_in = True
-                    st.session_state.role = role
-                    st.session_state.user_email = email
-                    st.rerun()
-        except Exception as e:
-            # Token invalid, continue to manual login
-            # st.error(f"Auto-login failed: {e}") 
-            pass
-
-    st.caption("Sign in with your Google account to continue.")
-
-    if st.button("🇬 Google Sign-In", type="primary", use_container_width=True):
-        try:
-            # Create the flow using the client secrets file from the Google API Console.
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CLIENT_SECRETS_FILE,
-                scopes=SCOPES,
-                redirect_uri="http://localhost:8501",  # Ensure this matches your Google Cloud Console
-            )
-
-            # Run the flow using the local server strategy
-            # Note: This might require different handling if deployed remotely (e.g., authorization_url)
-            # For local streamlit, run_local_server() opens a browser window.
-            # However, Streamlit reruns the script on interaction, so we need to be careful.
-            # A common pattern for local apps is to just use run_local_server.
-            
-            creds = flow.run_local_server(port=0)
-
-            # Use the credentials to get user info
-            service = build("oauth2", "v2", credentials=creds)
-            user_info = service.userinfo().get().execute()
-            email = user_info.get("email")
-
-            if email:
-                role = "admin" if email in ADMIN_EMAILS else "user"
-                st.session_state.logged_in = True
-                st.session_state.role = role
-                st.session_state.user_email = email
-                
-                # Save credentials for persistence
-                with open("app_token.json", "w") as token:
-                    token.write(creds.to_json())
-                
-                st.success(f"Successfully signed in as {email} ({role})")
-                st.rerun()
-            else:
-                st.error("Failed to retrieve email from Google.")
-
-        except Exception as e:
-            st.error(f"Login failed: {e}")
-            # st.exception(e) # Uncomment for debugging
-
-    # ------------------------------------------------------------------
-    # FALLBACK LOGIN (For Cloud Deployment where Google Auth might fail)
-    # ------------------------------------------------------------------
-    with st.expander("🔑 Admin Password Login (For Cloud/Backup)"):
-        password = st.text_input("Admin Password", type="password")
-        if st.button("Login with Password"):
-            # Check against st.secrets
-            # Handle both:
-            # 1. [admin_password] -> admin_password = "..."  (Nested dict)
-            # 2. admin_password = "..."                      (Top level string)
-            
-            secret_val = st.secrets.get("admin_password")
-            admin_pass = None
-
-            if isinstance(secret_val, str):
-                # Case 1: Simple string
-                admin_pass = secret_val
-            elif hasattr(secret_val, "admin_password"):
-                # Case 2: AttrDict with .property access
-                admin_pass = secret_val.admin_password
-            elif isinstance(secret_val, dict) and "admin_password" in secret_val:
-                # Case 3: Standard dict
-                admin_pass = secret_val["admin_password"]
-            
-            if admin_pass and password == admin_pass:
-                st.session_state.logged_in = True
-                st.session_state.role = "admin"
-                st.session_state.user_email = "admin@cloud"
-                st.success("Logged in via Password!")
-                st.rerun()
-            elif not admin_pass:
-                st.error("Admin password configuration error. Please ensure 'admin_password' is set in Secrets.")
-            else:
-                st.error("Invalid password")
+# Login page removed in favor of Sidebar Login
 
 # --------------------------------------------------
 # ADMIN PANEL
@@ -688,24 +573,62 @@ def render_prediction_ui(key_prefix="user"):
 # USER PANEL
 # --------------------------------------------------
 
-def user_panel():
-    hd1, hd2 = st.columns([5, 1])
-    with hd1:
-        st.title("👤 Rice Analysis")
-    with hd2:
-        st.write("")
-        if st.button("🚪 Logout", use_container_width=True):
-            logout()
-
-    render_prediction_ui(key_prefix="user")
+# User panel removed
 
 # --------------------------------------------------
 # MAIN ROUTER
 # --------------------------------------------------
 
-if not st.session_state.logged_in:
-    login_page()
-elif st.session_state.role == "admin":
+# --------------------------------------------------
+# SIDEBAR LOGIN (Admin Access)
+# --------------------------------------------------
+
+def render_sidebar_login():
+    with st.sidebar:
+        st.header("🔐 Admin Access")
+        
+        if st.session_state.logged_in:
+            st.success("Logged in as Admin")
+            if st.button("Logout"):
+                logout()
+            return
+
+        password = st.text_input("Enter Admin Password", type="password")
+        if st.button("Unlock Admin Panel"):
+            # Check against st.secrets
+            secret_val = st.secrets.get("admin_password")
+            admin_pass = None
+
+            if isinstance(secret_val, str):
+                admin_pass = secret_val
+            elif hasattr(secret_val, "admin_password"):
+                admin_pass = secret_val.admin_password
+            elif isinstance(secret_val, dict) and "admin_password" in secret_val:
+                admin_pass = secret_val["admin_password"]
+            
+            if admin_pass and password == admin_pass:
+                st.session_state.logged_in = True
+                st.session_state.role = "admin"
+                st.success("Access Granted!")
+                st.rerun()
+            else:
+                st.error("Invalid Password")
+
+# --------------------------------------------------
+# MAIN ROUTER
+# --------------------------------------------------
+
+# Always show the title
+# st.title("🌾 Rice Quality AI Pro") # Title is already in panels, avoid Double Title
+
+# Render Sidebar for Admin Login
+render_sidebar_login()
+
+# Main Content Logic
+if st.session_state.logged_in and st.session_state.role == "admin":
     admin_panel()
-elif st.session_state.role == "user":
-    user_panel()
+else:
+    # Public View (Prediction Only)
+    st.title("🌾 Rice Quality AI Pro")
+    st.info("👋 Welcome! This tool predicts rice quality using AI.")
+    render_prediction_ui(key_prefix="public")
