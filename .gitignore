@@ -1,0 +1,22 @@
+# Secrets
+client_secrets.json
+drive-key.json
+mycreds.txt
+app_token.json
+auth_config.py
+.streamlit/secrets.toml
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.pytest_cache/
+
+# Streamlit
+.streamlit/
+! .streamlit/config.toml
+
+# OS
+.DS_Store
