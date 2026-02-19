@@ -498,21 +498,15 @@ def login_page():
             secret_val = st.secrets.get("admin_password")
             admin_pass = None
 
-            if isinstance(secret_val, dict):
-                # If the user used a [header], it returns a dict
-                admin_pass = secret_val.get("admin_password")
-            elif isinstance(secret_val, str):
-                # If the user put it at top level
+            if isinstance(secret_val, str):
+                # Case 1: Simple string
                 admin_pass = secret_val
-            
-            # --- DEBUG BLOCK (Remove later) ---
-            if not admin_pass:
-                st.error(f"DEBUG info:")
-                st.write(f"Raw st.secrets keys: {list(st.secrets.keys())}")
-                st.write(f"admin_password key type: {type(secret_val)}")
-                if isinstance(secret_val, dict):
-                     st.write(f"Inner keys: {list(secret_val.keys())}")
-            # ----------------------------------
+            elif hasattr(secret_val, "admin_password"):
+                # Case 2: AttrDict with .property access
+                admin_pass = secret_val.admin_password
+            elif isinstance(secret_val, dict) and "admin_password" in secret_val:
+                # Case 3: Standard dict
+                admin_pass = secret_val["admin_password"]
             
             if admin_pass and password == admin_pass:
                 st.session_state.logged_in = True
@@ -521,7 +515,7 @@ def login_page():
                 st.success("Logged in via Password!")
                 st.rerun()
             elif not admin_pass:
-                st.error("Admin password not configured in secrets.toml. Please check the 'Secrets' settings.")
+                st.error("Admin password configuration error. Please ensure 'admin_password' is set in Secrets.")
             else:
                 st.error("Invalid password")
 
