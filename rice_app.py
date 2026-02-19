@@ -46,7 +46,11 @@ AGE_TIPS = {
 # LOGIN CONFIG
 # --------------------------------------------------
 
-from auth_config import ADMIN_EMAILS
+# from auth_config import ADMIN_EMAILS
+ADMIN_EMAILS = [
+    "admin@gmail.com",
+    "mithusahoo943@gmail.com",
+]
 
 CLIENT_SECRETS_FILE = "client_secrets.json"
 SCOPES = [
