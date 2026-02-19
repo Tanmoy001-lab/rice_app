@@ -505,6 +505,15 @@ def login_page():
                 # If the user put it at top level
                 admin_pass = secret_val
             
+            # --- DEBUG BLOCK (Remove later) ---
+            if not admin_pass:
+                st.error(f"DEBUG info:")
+                st.write(f"Raw st.secrets keys: {list(st.secrets.keys())}")
+                st.write(f"admin_password key type: {type(secret_val)}")
+                if isinstance(secret_val, dict):
+                     st.write(f"Inner keys: {list(secret_val.keys())}")
+            # ----------------------------------
+            
             if admin_pass and password == admin_pass:
                 st.session_state.logged_in = True
                 st.session_state.role = "admin"
