@@ -490,8 +490,20 @@ def login_page():
     with st.expander("🔑 Admin Password Login (For Cloud/Backup)"):
         password = st.text_input("Admin Password", type="password")
         if st.button("Login with Password"):
-            # Check against st.secrets or a default (warn user to set secret)
-            admin_pass = st.secrets.get("admin_password")
+            # Check against st.secrets
+            # Handle both:
+            # 1. [admin_password] -> admin_password = "..."  (Nested dict)
+            # 2. admin_password = "..."                      (Top level string)
+            
+            secret_val = st.secrets.get("admin_password")
+            admin_pass = None
+
+            if isinstance(secret_val, dict):
+                # If the user used a [header], it returns a dict
+                admin_pass = secret_val.get("admin_password")
+            elif isinstance(secret_val, str):
+                # If the user put it at top level
+                admin_pass = secret_val
             
             if admin_pass and password == admin_pass:
                 st.session_state.logged_in = True
@@ -500,7 +512,7 @@ def login_page():
                 st.success("Logged in via Password!")
                 st.rerun()
             elif not admin_pass:
-                st.error("Admin password not configured in secrets.toml")
+                st.error("Admin password not configured in secrets.toml. Please check the 'Secrets' settings.")
             else:
                 st.error("Invalid password")
 
