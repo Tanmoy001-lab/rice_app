@@ -122,17 +122,30 @@ def add_data(row):
 # --------------------------------------------------
 
 def get_gcp_creds():
-    """Returns Service Account credentials from file or st.secrets."""
+    """Returns Credentials from st.secrets (user token) or Service Account."""
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
     
-    # 1. Try local file
+    # ------------------------------------------------------------------
+    # 1. PREFERRED: User Token from Secrets (Bypasses Storage Quota)
+    # ------------------------------------------------------------------
+    # The user pastes their local token into secrets to upload as themselves.
+    if "drive_token" in st.secrets:
+        try:
+            token_info = st.secrets["drive_token"]
+            # Reconstruct credentials from dictionary
+            return UserCredentials.from_authorized_user_info(token_info, scopes)
+        except Exception as e:
+            st.error(f"Failed to load User Token from secrets: {e}")
+
+    # ------------------------------------------------------------------
+    # 2. FALLBACK: Service Account (Has 0GB storage on personal Gmail)
+    # ------------------------------------------------------------------
     if os.path.exists("drive-key.json"):
         return ServiceAccountCredentials.from_service_account_file("drive-key.json", scopes=scopes)
     
-    # 2. Try Streamlit Secrets
     if "gcp_service_account" in st.secrets:
         return ServiceAccountCredentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     
@@ -141,7 +154,7 @@ def get_gcp_creds():
 def get_drive_service():
     creds = get_gcp_creds()
     if not creds:
-        st.error("Missing GCP Credentials (drive-key.json or st.secrets)")
+        st.error("Missing GCP Credentials. Please set [drive_token] or [gcp_service_account] in Secrets.")
         return None
     return build("drive", "v3", credentials=creds)
 
