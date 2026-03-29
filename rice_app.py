@@ -22,26 +22,47 @@ from google.oauth2.credentials import Credentials as UserCredentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+# # --------------------------------------------------
+# # CONFIG
+# # --------------------------------------------------
+
+# st.set_page_config(page_title="Rice Quality AI Pro", layout="centered")
+
+# SHEET_ID        = "10lXOiNCfJDnz5bvTtTydEcLfX4FSirfxvitum4udmNs"
+# TARGET_FOLDER_ID = "1h0UDCfnGCgdTD3AF7nLjvsBJpDvidqWr"
+
+# AGE_LABELS = ["0-3 months", "3-6 months", "6-12 months", "1-2 years", "2+ years"]
+# USE_LABELS = ["Biryani", "Daily Rice", "Fried Rice"]
+
+# AGE_TIPS = {
+#     "0-3 months":  "🍚 Very fresh rice — best for soft dishes like porridge or sticky rice.",
+#     "3-6 months":  "🍚 Balanced rice — suitable for everyday cooking.",
+#     "6-12 months": "🍚 Ideal for biryani — aroma and texture are well developed.",
+#     "1-2 years":   "🍚 Well-aged rice — rich flavour, great for premium dishes.",
+#     "2+ years":    "🍚 Highly aged rice — strong texture, use carefully.",
+# }
 # --------------------------------------------------
-# CONFIG
+# CONFIG (TEMPORARY PAPAYA SETUP)
 # --------------------------------------------------
 
-st.set_page_config(page_title="Rice Quality AI Pro", layout="centered")
+st.set_page_config(page_title="Papaya Quality AI Test", layout="centered")
 
 SHEET_ID        = "10lXOiNCfJDnz5bvTtTydEcLfX4FSirfxvitum4udmNs"
 TARGET_FOLDER_ID = "1h0UDCfnGCgdTD3AF7nLjvsBJpDvidqWr"
 
-AGE_LABELS = ["0-3 months", "3-6 months", "6-12 months", "1-2 years", "2+ years"]
-USE_LABELS = ["Biryani", "Daily Rice", "Fried Rice"]
+# Temporary Papaya Labels
+AGE_LABELS = ["Day 0", "Day 5", "Day 10", "Day 15", "Day 20", "Day 25", "Day 30"]
+USE_LABELS = ["Raw", "Semi-Ripe", "Ripe", "Overripe"] # Kept to maintain the 2-output NN architecture
 
 AGE_TIPS = {
-    "0-3 months":  "🍚 Very fresh rice — best for soft dishes like porridge or sticky rice.",
-    "3-6 months":  "🍚 Balanced rice — suitable for everyday cooking.",
-    "6-12 months": "🍚 Ideal for biryani — aroma and texture are well developed.",
-    "1-2 years":   "🍚 Well-aged rice — rich flavour, great for premium dishes.",
-    "2+ years":    "🍚 Highly aged rice — strong texture, use carefully.",
+    "Day 0":  "🥭 Day 0: Completely raw and hard.",
+    "Day 5":  "🥭 Day 5: Starting to show slight color changes.",
+    "Day 10": "🥭 Day 10: Semi-ripe, getting softer.",
+    "Day 15": "🥭 Day 15: Almost ripe.",
+    "Day 20": "🥭 Day 20: Perfectly ripe and ready to eat.",
+    "Day 25": "🥭 Day 25: Getting overripe and very soft.",
+    "Day 30": "🥭 Day 30: Highly overripe or spoiling.",
 }
-
 # --------------------------------------------------
 # LOGIN CONFIG
 # --------------------------------------------------
@@ -79,10 +100,9 @@ for key, default in {
 
 @st.cache_resource
 def load_my_model():
-    if os.path.exists("rice_model.keras"):
-        return load_model("rice_model.keras", compile=False)
+    if os.path.exists("papaya_model.keras"):
+        return load_model("papaya_model.keras", compile=False)
     return None
-
 model = load_my_model()
 
 # --------------------------------------------------
@@ -292,7 +312,7 @@ def train_model_from_sheet():
 
     st.info("Training started — please wait…")
     history = model_local.fit(X, [y_age, y_use], epochs=8, validation_split=0.1)
-    model_local.save("rice_model.keras")
+    model_local.save("papaya_model.keras")
 
     st.cache_resource.clear()
     model = load_my_model()
@@ -528,7 +548,7 @@ def admin_panel():
 # --------------------------------------------------
 
 def render_prediction_ui(key_prefix="user"):
-    if not os.path.exists("rice_model.keras"):
+    if not os.path.exists("papaya_model.keras"):
         st.warning("⚠️ No trained model available yet. Please contact the admin.")
         return
 
