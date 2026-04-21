@@ -12,6 +12,9 @@ from PIL import Image
 from io import BytesIO
 from tensorflow.keras.models import load_model
 
+import json
+from datetime import datetime
+
 # from pydrive2.auth import GoogleAuth  # Removed in favor of Service Account
 # from pydrive2.drive import GoogleDrive # Removed in favor of Service Account
 
@@ -98,10 +101,12 @@ for key, default in {
 # MODEL
 # --------------------------------------------------
 
+MODEL_PATH = "rice_model.keras"
+
 @st.cache_resource
 def load_my_model():
-    if os.path.exists("papaya_model.keras"):
-        return load_model("papaya_model.keras", compile=False)
+    if os.path.exists(MODEL_PATH):
+        return load_model(MODEL_PATH, compile=False)
     return None
 model = load_my_model()
 
@@ -312,7 +317,7 @@ def train_model_from_sheet():
 
     st.info("Training started — please wait…")
     history = model_local.fit(X, [y_age, y_use], epochs=8, validation_split=0.1)
-    model_local.save("papaya_model.keras")
+    model_local.save(MODEL_PATH)
 
     st.cache_resource.clear()
     model = load_my_model()
@@ -452,7 +457,7 @@ def admin_panel():
         if st.button("🚪 Logout", use_container_width=True):
             logout()
 
-    status = "✅ Model exists" if os.path.exists("rice_model.keras") else "⚠️ No model yet"
+    status = "✅ Model exists" if os.path.exists(MODEL_PATH) else "⚠️ No model yet"
     st.caption(f"Model status: {status}")
     st.markdown("---")
 
@@ -548,7 +553,7 @@ def admin_panel():
 # --------------------------------------------------
 
 def render_prediction_ui(key_prefix="user"):
-    if not os.path.exists("papaya_model.keras"):
+    if not os.path.exists(MODEL_PATH):
         st.warning("⚠️ No trained model available yet. Please contact the admin.")
         return
 
@@ -600,6 +605,37 @@ def render_prediction_ui(key_prefix="user"):
 # --------------------------------------------------
 
 # --------------------------------------------------
+# FIREBASE & ADMIN SETUP
+# --------------------------------------------------
+
+def load_firebase_config():
+    try:
+        with open(".firebase_config.json", "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        # Fallback to Streamlit secrets when deployed to the Cloud
+        if "firebase_config" in st.secrets:
+            # Streamlit secrets are dict-like, just return it directly
+            return st.secrets["firebase_config"]
+        return {"allowed_admins": []}
+
+firebase_config = load_firebase_config()
+
+def log_user_to_firestore(user_email):
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+        db = firestore.client()
+        db.collection("users").add({
+            "email": user_email,
+            "timestamp": datetime.now()
+        })
+    except Exception as e:
+        print(f"Firestore logging failed: {e}")
+
+# --------------------------------------------------
 # SIDEBAR LOGIN (Admin Access)
 # --------------------------------------------------
 
@@ -607,32 +643,31 @@ def render_sidebar_login():
     with st.sidebar:
         st.header("🔐 Admin Access")
         
-        if st.session_state.logged_in:
+        if st.session_state.get("is_admin") or st.session_state.get("logged_in"):
             st.success("Logged in as Admin")
             if st.button("Logout"):
                 logout()
             return
 
-        password = st.text_input("Enter Admin Password", type="password")
-        if st.button("Unlock Admin Panel"):
-            # Check against st.secrets
-            secret_val = st.secrets.get("admin_password")
-            admin_pass = None
-
-            if isinstance(secret_val, str):
-                admin_pass = secret_val
-            elif hasattr(secret_val, "admin_password"):
-                admin_pass = secret_val.admin_password
-            elif isinstance(secret_val, dict) and "admin_password" in secret_val:
-                admin_pass = secret_val["admin_password"]
-            
-            if admin_pass and password == admin_pass:
+        if "user" not in st.session_state:
+            if st.button("Admin Login"):
+                # trigger Google login
+                st.info("Trigger Google Login Window")
+        
+        st.markdown("---")
+        st.caption("Test admin validation:")
+        user_email = st.text_input("Enter Google Email")
+        if st.button("Validate Email"):
+            if user_email in firebase_config.get("allowed_admins", []):
+                st.session_state["is_admin"] = True
                 st.session_state.logged_in = True
                 st.session_state.role = "admin"
-                st.success("Access Granted!")
+                st.session_state["user"] = user_email
+                st.success("Access Granted")
+                log_user_to_firestore(user_email)
                 st.rerun()
             else:
-                st.error("Invalid Password")
+                st.error("Access Denied")
 
 # --------------------------------------------------
 # MAIN ROUTER
@@ -645,10 +680,11 @@ def render_sidebar_login():
 render_sidebar_login()
 
 # Main Content Logic
-if st.session_state.logged_in and st.session_state.role == "admin":
+if st.session_state.get("is_admin") or (st.session_state.get("logged_in") and st.session_state.get("role") == "admin"):
     admin_panel()
 else:
     # Public View (Prediction Only)
     st.title("🌾 Rice Quality AI Pro")
     st.info("👋 Welcome! This tool predicts rice quality using AI.")
+    st.warning("Only admin can train model")
     render_prediction_ui(key_prefix="public")

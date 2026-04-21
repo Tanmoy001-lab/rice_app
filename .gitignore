@@ -20,3 +20,9 @@ venv/
 
 # OS
 .DS_Store
+
+# Firebase Auth
+.firebase_config.json
+
+# Model Persistence
+!rice_model.keras
