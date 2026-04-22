@@ -615,8 +615,8 @@ def load_firebase_config():
     except FileNotFoundError:
         # Fallback to Streamlit secrets when deployed to the Cloud
         if "firebase_config" in st.secrets:
-            # Streamlit secrets are dict-like, just return it directly
-            return st.secrets["firebase_config"]
+            # Streamlit secrets are dict-like, convert to standard dict for JSON serialization
+            return dict(st.secrets["firebase_config"])
         return {"allowed_admins": []}
 
 firebase_config = load_firebase_config()
