@@ -736,8 +736,8 @@ def render_ai_chatbot():
 
         genai.configure(api_key=api_key)
         try:
-            # Fallback to the highly stable gemini-pro if 1.5-flash causes 404s
-            model_genai = genai.GenerativeModel('gemini-pro')
+            # Uses the newest 2.5 flash model supported by the 2026 API tier
+            model_genai = genai.GenerativeModel('gemini-2.5-flash')
         except Exception as e:
             st.error(f"Error loading AI model: {e}")
             return
