@@ -14,6 +14,7 @@ from tensorflow.keras.models import load_model
 
 import json
 from datetime import datetime
+import google.generativeai as genai
 
 # from pydrive2.auth import GoogleAuth  # Removed in favor of Service Account
 # from pydrive2.drive import GoogleDrive # Removed in favor of Service Account
@@ -93,6 +94,7 @@ for key, default in {
     "selected_role":    None,
     "train_img_bytes":  None,
     "pred_img_bytes":   None,
+    "chat_history":     [{"role": "assistant", "content": "Hello! I am your AI Agriculture Consultant. Ask me anything about rice quality, storage, or cooking!"}],
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -694,3 +696,70 @@ else:
     st.info("👋 Welcome! This tool predicts rice quality using AI.")
     st.warning("Only admin can train model")
     render_prediction_ui(key_prefix="public")
+
+# --------------------------------------------------
+# AI EXPERT CHATBOT
+# --------------------------------------------------
+
+def render_ai_chatbot():
+    st.markdown("""
+    <style>
+    div[data-testid="stExpander"]:has(#chat-widget-anchor) {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 350px;
+        z-index: 1000;
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    with st.expander("💬 Ask the AI Expert (Storage & Quality Advice)", expanded=False):
+        st.markdown('<div id="chat-widget-anchor"></div>', unsafe_allow_html=True)
+        api_key = st.secrets.get("GEMINI_API_KEY")
+        if not api_key:
+            st.warning("⚠️ Gemini API Key is missing. Please add GEMINI_API_KEY to your Streamlit secrets.")
+            return
+
+        genai.configure(api_key=api_key)
+        try:
+            model_genai = genai.GenerativeModel('gemini-1.5-flash')
+        except Exception as e:
+            st.error(f"Error loading AI model: {e}")
+            return
+            
+        # Draw previous messages
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+                
+        user_input = st.chat_input("Ask about storage, freshness, etc...")
+        if user_input:
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.write(user_input)
+                
+            # Build history for Gemini
+            gemini_history = []
+            for m in st.session_state.chat_history[:-1]:
+                if m["role"] == "assistant":
+                    if m["content"] != "Hello! I am your AI Agriculture Consultant. Ask me anything about rice quality, storage, or cooking!":
+                        gemini_history.append({"role": "model", "parts": [m["content"]]})
+                else:
+                    gemini_history.append({"role": "user", "parts": [m["content"]]})
+            
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        chat_session = model_genai.start_chat(history=gemini_history)
+                        prompt = f"(You are an expert on agricultural science, specifically rice and fruit quality/storage. Give brief, factual advice.)\\n\\nUser: {user_input}"
+                        response = chat_session.send_message(prompt)
+                        st.write(response.text)
+                        st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                    except Exception as e:
+                        st.error(f"Failed to communicate with AI: {e}")
+
+# Render the Chatbot at the very bottom
+render_ai_chatbot()
