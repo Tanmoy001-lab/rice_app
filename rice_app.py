@@ -718,10 +718,17 @@ def render_ai_chatbot():
     """, unsafe_allow_html=True)
     with st.expander("💬 Ask the AI Expert (Storage & Quality Advice)", expanded=False):
         st.markdown('<div id="chat-widget-anchor"></div>', unsafe_allow_html=True)
-        # Be resilient to the key being placed inside the [firebase_config] TOML block by accident
-        api_key = st.secrets.get("GEMINI_API_KEY")
-        if not api_key and "firebase_config" in st.secrets:
-            api_key = st.secrets["firebase_config"].get("GEMINI_API_KEY")
+        
+        # Robust hunt for the API key anywhere in the nested secrets dictionary
+        def find_key(d, target_key):
+            if target_key in d: return d[target_key]
+            for k, v in d.items():
+                if isinstance(v, dict) or hasattr(v, "items"):
+                    res = find_key(dict(v), target_key)
+                    if res: return res
+            return None
+            
+        api_key = find_key(dict(st.secrets), "GEMINI_API_KEY")
             
         if not api_key:
             st.warning("⚠️ Gemini API Key is missing. Please add GEMINI_API_KEY to your Streamlit secrets.")
