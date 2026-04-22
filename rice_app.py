@@ -638,6 +638,13 @@ def log_user_to_firestore(user_email):
 # --------------------------------------------------
 # SIDEBAR LOGIN (Admin Access)
 # --------------------------------------------------
+import streamlit.components.v1 as components
+import os
+
+try:
+    _firebase_login = components.declare_component("firebase_login", path=os.path.join(os.path.dirname(__file__), "firebase_login"))
+except:
+    _firebase_login = None
 
 def render_sidebar_login():
     with st.sidebar:
@@ -650,24 +657,23 @@ def render_sidebar_login():
             return
 
         if "user" not in st.session_state:
-            if st.button("Admin Login"):
-                # trigger Google login
-                st.info("Trigger Google Login Window")
-        
-        st.markdown("---")
-        st.caption("Test admin validation:")
-        user_email = st.text_input("Enter Google Email")
-        if st.button("Validate Email"):
-            if user_email in firebase_config.get("allowed_admins", []):
-                st.session_state["is_admin"] = True
-                st.session_state.logged_in = True
-                st.session_state.role = "admin"
-                st.session_state["user"] = user_email
-                st.success("Access Granted")
-                log_user_to_firestore(user_email)
-                st.rerun()
+            st.markdown("Please sign in securely with Google to train the model:")
+            if _firebase_login:
+                user_email = _firebase_login(firebase_config=firebase_config, key="google_login")
+                
+                if user_email:
+                    if user_email in firebase_config.get("allowed_admins", []):
+                        st.session_state["is_admin"] = True
+                        st.session_state.logged_in = True
+                        st.session_state.role = "admin"
+                        st.session_state["user"] = user_email
+                        st.success("Access Granted")
+                        log_user_to_firestore(user_email)
+                        st.rerun()
+                    else:
+                        st.error("Access Denied: You are not authorized.")
             else:
-                st.error("Access Denied")
+                st.error("Custom Firebase component failed to load locally.")
 
 # --------------------------------------------------
 # MAIN ROUTER
